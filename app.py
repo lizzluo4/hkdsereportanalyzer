@@ -3,7 +3,7 @@ import os
 import textwrap
 
 import altair as alt
-import groq
+import google.generativeai as genai
 import pandas as pd
 import streamlit as st
 from reportlab.lib.pagesizes import letter
@@ -85,14 +85,22 @@ def dataframe_to_structured_text(df, label):
     return "\n".join(lines)
 
 
-def generate_groq_report(language, total_df, item_df, mcq_df, custom_prompt):
+def get_gemini_api_key():
     try:
-        api_key = st.secrets["GROQ_API_KEY"]
+        key = st.secrets["GEMINI_API_KEY"]
+        if isinstance(key, str):
+            key = key.strip()
+        if not key:
+            return None
+        return key
     except Exception:
-        raise ValueError("Missing GROQ_API_KEY in st.secrets. Please add it to your Streamlit secrets.")
+        return None
 
+
+def generate_gemini_report(language, total_df, item_df, mcq_df, custom_prompt):
+    api_key = get_gemini_api_key()
     if not api_key:
-        raise ValueError("GROQ_API_KEY in st.secrets is empty. Please provide a valid key.")
+        raise ValueError("Missing GEMINI_API_KEY in Streamlit secrets.")
 
     system_instruction = (
         "你是一位專業的學校數據分析報告撰寫者。請以繁體中文撰寫，保持清晰、結構化且避免虛構數字。"
@@ -128,24 +136,24 @@ def generate_groq_report(language, total_df, item_df, mcq_df, custom_prompt):
         "If the data is insufficient, state that clearly and avoid making up values."
     )
 
-    client = groq.Client(api_key=api_key)
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": user_message},
-        ],
-        max_tokens=6500,
-        temperature=0.3,
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-2.5-pro")
+    
+    full_message = f"{system_instruction}\n\n{user_message}"
+    response = model.generate_content(
+        full_message,
+        generation_config=genai.types.GenerationConfig(
+            max_output_tokens=6500,
+            temperature=0.3,
+        ),
     )
 
-    if not getattr(response, "choices", None):
-        raise ValueError("Groq returned an empty response.")
+    if not response or not response.text:
+        raise ValueError("Gemini returned an empty response.")
 
-    first_choice = response.choices[0]
-    report_text = getattr(getattr(first_choice, "message", None), "content", None)
+    report_text = response.text
     if report_text is None:
-        raise ValueError("Groq did not return any report text.")
+        raise ValueError("Gemini did not return any report text.")
     return report_text
 
 
@@ -465,8 +473,8 @@ with tab2:
 with tab3:
     st.subheader("🧠 LLM報告生成器 | LLM Report Generator")
     st.info(
-        "本標籤頁會從自訂項目分析及自訂多項選擇題分析分頁讀取總覽表，並使用 Groq 生成分析報告。"
-        "This tab reads overview tables from the custom item and MCQ pages through session state and generates reports using Groq."
+        "本標籤頁會從自訂項目分析及自訂多項選擇題分析分頁讀取總覽表，並使用 Google Gemini 生成分析報告。"
+        "This tab reads overview tables from the custom item and MCQ pages through session state and generates reports using Google Gemini."
     )
 
     total_df = st.session_state.get("custom_total_overview_df")
@@ -514,15 +522,19 @@ with tab3:
         elif prompt_length >= 1350:
             st.caption(f"⚠️ 剩餘 {1500 - prompt_length} 字")
 
-    try:
-        api_key = st.secrets["GROQ_API_KEY"]
-    except Exception:
-        api_key = None
+    api_key = get_gemini_api_key()
+
+    with st.expander("Secrets Debug", expanded=True):
+        secret_keys = list(st.secrets.keys())
+        st.write("Available secret keys:", secret_keys)
+        st.write("Has GEMINI_API_KEY:", "GEMINI_API_KEY" in st.secrets)
+        if "GEMINI_API_KEY" in st.secrets:
+            raw_key = st.secrets["GEMINI_API_KEY"]
+            masked = raw_key[:4] + "***" if isinstance(raw_key, str) and raw_key.strip() else "(empty)"
+            st.write("Preview:", masked)
 
     if not api_key:
-        st.error(
-            "缺少 Groq API 金鑰。請在 Streamlit secrets 中新增 GROQ_API_KEY。"
-        )
+        st.error("無法生成報告，因為缺少 GEMINI_API_KEY。| Cannot generate report because GEMINI_API_KEY is missing.")
 
     col_zh, col_en = st.columns(2)
     gen_zh = False
@@ -533,7 +545,7 @@ with tab3:
         gen_en = st.button("Generate English Report", type="primary", use_container_width=True)
 
     if (gen_zh or gen_en) and not api_key:
-        st.warning("無法生成報告，因為缺少 GROQ_API_KEY。| Cannot generate report because GROQ_API_KEY is missing.")
+        st.warning("無法生成報告，因為缺少 GEMINI_API_KEY。| Cannot generate report because GEMINI_API_KEY is missing.")
 
     if gen_zh or gen_en:
         if item_df is None and mcq_df is None:
@@ -543,10 +555,10 @@ with tab3:
         elif api_key:
             try:
                 if gen_zh:
-                    report = generate_groq_report("zh", total_df, item_df, mcq_df, custom_report_prompt)
+                    report = generate_gemini_report("zh", total_df, item_df, mcq_df, custom_report_prompt)
                     st.session_state["generated_report_zh"] = report
                 if gen_en:
-                    report = generate_groq_report("en", total_df, item_df, mcq_df, custom_report_prompt)
+                    report = generate_gemini_report("en", total_df, item_df, mcq_df, custom_report_prompt)
                     st.session_state["generated_report_en"] = report
             except Exception as e:
                 st.error(f"❌ 報告生成失敗 | Report generation failed: {str(e)}")
