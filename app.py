@@ -139,7 +139,7 @@ def generate_gemini_report(language, total_df, item_df, mcq_df, custom_prompt):
     )
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.5-pro")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     
     full_message = f"{system_instruction}\n\n{user_message}"
     response = model.generate_content(
