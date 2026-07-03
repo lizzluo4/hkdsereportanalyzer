@@ -87,6 +87,8 @@ def dataframe_to_structured_text(df, label):
 
 def get_gemini_api_key():
     try:
+        if "GEMINI_API_KEY" not in st.secrets:
+            return None
         key = st.secrets["GEMINI_API_KEY"]
         if isinstance(key, str):
             key = key.strip()
@@ -525,13 +527,17 @@ with tab3:
     api_key = get_gemini_api_key()
 
     with st.expander("Secrets Debug", expanded=True):
-        secret_keys = list(st.secrets.keys())
-        st.write("Available secret keys:", secret_keys)
-        st.write("Has GEMINI_API_KEY:", "GEMINI_API_KEY" in st.secrets)
-        if "GEMINI_API_KEY" in st.secrets:
-            raw_key = st.secrets["GEMINI_API_KEY"]
-            masked = raw_key[:4] + "***" if isinstance(raw_key, str) and raw_key.strip() else "(empty)"
-            st.write("Preview:", masked)
+        try:
+            secret_keys = list(st.secrets.keys())
+            st.write("Available secret keys:", secret_keys)
+            has_key = "GEMINI_API_KEY" in st.secrets
+            st.write("Has GEMINI_API_KEY:", has_key)
+            if has_key:
+                raw_key = st.secrets["GEMINI_API_KEY"]
+                masked = raw_key[:4] + "***" if isinstance(raw_key, str) and raw_key.strip() else "(empty)"
+                st.write("Preview:", masked)
+        except Exception as e:
+            st.write("Secrets not available:", str(e))
 
     if not api_key:
         st.error("無法生成報告，因為缺少 GEMINI_API_KEY。| Cannot generate report because GEMINI_API_KEY is missing.")
