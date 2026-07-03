@@ -145,7 +145,6 @@ def generate_gemini_report(language, total_df, item_df, mcq_df, custom_prompt):
     response = model.generate_content(
         full_message,
         generation_config=genai.types.GenerationConfig(
-            max_output_tokens=6500,
             temperature=0.3,
         ),
     )
@@ -510,19 +509,11 @@ with tab3:
         value=st.session_state.get("custom_report_prompt", default_prompt),
         key="custom_report_prompt",
         height=500,
-        max_chars=1500,
     )
     
     # 實時計算字數
     prompt_length = len(st.session_state.get("custom_report_prompt", default_prompt))
-    col_char_info1, col_char_info2 = st.columns([3, 1])
-    with col_char_info1:
-        st.caption(f"已輸入字符數: {prompt_length} / 1500")
-    with col_char_info2:
-        if prompt_length >= 1500:
-            st.caption("⚠️ 輸入字數達到上限")
-        elif prompt_length >= 1350:
-            st.caption(f"⚠️ 剩餘 {1500 - prompt_length} 字")
+    st.caption(f"已輸入字符數: {prompt_length}")
 
     api_key = get_gemini_api_key()
 
